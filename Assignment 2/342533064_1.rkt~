@@ -1,0 +1,183 @@
+#lang pl 02
+
+#|
+1.a
+
+<SE> ::= <string> | <noString>
+<string> ::= <"D">
+<D> ::= <A> <B> | 0
+<A> ::= 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+<B> ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | λ | <B><B>
+<noString> ::= <D> |
+<chars> |
+( string <noString> ) |
+( string-append <noString> ) |
+( string-insert <string-insert>)|
+( number->string <number->string> ) |
+(string-length <number->string> ) |
+ λ
+<chars> ::= #\<
+
+|#
+
+
+
+
+
+
+
+
+
+
+#lang pl 02
+#|
+#||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+                              QUESTION  1.a
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||#
+
+
+(1) <SE>::= <notString> 
+(2)     | <strexp>
+
+(3)<strexp>::= "<D>"
+(4)      | ""
+(5)      | ( string <chars> )
+(6)      | ( string-append <multiSe> )
+(7)      | ( string-insert <strexp> <char> <D> )
+(8)      | ( number->string <D> )
+
+<notString>::= (9) <D> |(10) <char>
+
+<multiSe>::=(11) <strexp> <multiSe> |(12) <strexp> 
+
+<chars>::=(13) <char> <chars> |(14) <char>
+
+(15).....(24) <char>::= #\1 | #\2 | #\3 | #\4 | #\5 | #\6 | #\7 | #\8 | #\9 | #\0 
+
+(25)......(36)<D>::= 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0 | <D> <D> | (string-length <strexp>)
+
+#|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+                           QUESTION 1.b
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||#
+
+( string-append "" "44" )
+
+     (2)     (6)                           
+<SE> -> <strexp> -> ( string-append <multiSe> )
+
+(11)                               (12)                           (3)                             (35)
+-> ( string-append <multiSe> <strexp> ) -> ( string-append <strexp> <strexp> ) -> ( string-append <strexp> "<D>" ) -> ( string-append <strexp> "<D><D>" )
+
+(28)                             (28)                           (4)
+ -> ( string-append <strexp> "<D>4" ) -> ( string-append <strexp> "44" ) -> ( string-append "" "44" )
+
+#|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+                           QUESTION 2.a
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||#
+Problem: in one word-ambiguity.
+Explain: the pproblem is the we have more than one option to solve this code line:
+                                                                          1) {set 1} before {set 2} (and both of them before get). so the output of this line be 6.
+                                                                          2) {set 2} before {set 1}. so the output of this line be 3.
+                                                                          3) get before {set 1} and {set 2}. so the output is unknown(we don't know which value the memory cell contains)
+Solution: very simple, we should start solve the line  from left side. then the get must to come after set, and we can solve this line in one way. 
+
+#|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+                           QUESTION 2.b
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||#
+
+<SEQ>::= {seq <FAE>} | {seq {set <FAE>} <HAE>}
+
+<FAE>::= {* <num> <num>} | {/ <num> <num>} | {+ <num> <num>} | {- <num> <num>}    (First AE, can't use get)
+
+<LAE>::= {* <numOrGet> <numOrGet>} | {/ <numOrGet> <numOrGet>} | {+ <numOrGet> <numOrGet>} | {- <numOrGet> <numOrGet>} (Low AE called by HAE)
+
+<HAE>::= {<LAE>} | {set <LAE>} <HAE>  (High AE call LAE without "set" iff is the last LAE)
+
+<num>::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 
+
+<numOrGet>::= <num>| get
+
+|#
+
+#|
+Helper function for sum-of-square
+Input: Number
+Output: Number (square of input)
+|#
+(: square : Number -> Number)
+(define (square num) (* num num))
+
+(: sum-of-squares : (Listof Number) -> Number)
+(define (sum-of-squares list)
+  
+(foldl + 0 (map square list)))
+
+;;(test (sum-of-squares '(1 2 3)) => 14)
+
+
+
+#|
+----------------------------Q 4.1------------------------------------
+<PLANG>::={{poly <AEs>} {<AEs>}}
+
+<AEs>::=<AE> | <AE> <AEs>
+
+<AE>::= <num>
+ | { + <AE> <AE> }
+ | { - <AE> <AE> }
+ | { * <AE> <AE> }
+ | { / <AE> <AE> }
+
+-----------------------Q 4.2-----------------------------------------
+|#
+
+(define-type PLANG
+  [Poly (Listof AE) (Listof AE)])
+
+(define-type AE
+  [Num Number]
+  [Add AE AE]
+  [Sub AE AE]
+  [Mul AE AE]
+  [Div AE AE])
+
+
+(: parse-sexpr : Sexpr -> AE)
+;; to convert s-expressions into AEs
+(define (parse-sexpr sexpr)
+  (match sexpr
+    [(number: n) (Num n)]
+    [(list '+ lhs rhs) (Add (parse-sexpr lhs)
+                            (parse-sexpr rhs))]
+    [(list '- lhs rhs) (Sub (parse-sexpr lhs)
+                            (parse-sexpr rhs))]
+    [(list '* lhs rhs) (Mul (parse-sexpr lhs)
+                            (parse-sexpr rhs))]
+    [(list '/ lhs rhs) (Div (parse-sexpr lhs)
+                            (parse-sexpr rhs))]
+    [else (error 'parse-sexpr "bad syntax in ~s"
+                 sexpr)]))
+
+(: parse : String -> PLANG)
+;; parses a string containing a PLANG expression to a PLANG AST
+(define (parse str)
+  (let ([code (string->sexpr str)])
+    (match code
+      [(list (list 'poly var var2 ...) (list var3 var4 ...)) (Poly (map parse-sexpr (cons var var2)) (map parse-sexpr (cons var3 var4)))]
+      [(list (list 'poly) rhs) (error 'parse "at least one coefficient is
+                      required in ~s" code)]
+      [(list (list 'poly var var2 ...) '()) (error 'parse "at least one point is
+                      required in ~s" code)]
+   )))
+
+;;(parse "{{poly 1 2 3} {1 2 3}}")
+
+(test (parse "{{poly 1 2 3} {1 2 3}}")
+      => (Poly (list (Num 1) (Num 2) (Num 3))
+               (list (Num 1) (Num 2) (Num 3))))
+(test (parse "{{poly } {1 2} }")
+      =error> "parse: at least one coefficient is
+                      required in ((poly) (1 2))")
+(test (parse "{{poly 1 2} {} }")
+      =error> "parse: at least one point is
+                      required in ((poly 1 2) ())")
