@@ -115,21 +115,21 @@ Decide an order of derivation, e.g: from left to right.
 {seq <FAE>} -> {seq * <Integer> <Integer>} (3)
 {seq * <Integer> <Integer>} -> {seq * <digit><Integer> <digit><Integer>} (15)
 {seq *<digit><Integer> <digit><Integer>} -> {seq * <digit><digit> <digit><digit>} (14)
-{seq *<digit><digit> <digit><digit>} ->  {seq * 34 25} (12)
+{seq *<digit><digit> <digit><digit>} ->  {seq * 98 76} (12)
 
 ;; 2)
 <MAE> -> {seq <FAE>} (1)
 {seq <FAE>} -> {seq - <Integer> <Integer>} (3)
 {seq - <Integer> <Integer>} -> {seq - <digit><Integer> <digit><Integer>} (15)
 {seq -<digit><Integer> <digit><Integer>} -> {seq - <digit><digit> <digit><digit>} (14)
-{seq -<digit><digit> <digit><digit>} ->  {seq - 33 06} (12)
+{seq -<digit><digit> <digit><digit>} ->  {seq - 54 32} (12)
 
 ;; 3)
 <MAE> -> {seq {set <FAE>}} (2)
 {seq  {set <FAE>}} -> {seq {set - <Integer> <Integer>}} (3)
 {seq {set - <Integer> <Integer>}} ->  {seq {set - <digit><Integer> <digit><Integer>}} (15)
 {seq {set - <digit><Integer> <digit><Integer>}} -> {seq {set - <digit><digit> <digit><digit>}}(14)
-{seq {set - <digit><digit> <digit><digit>}} -> {seq {set - 30 64}} (12)
+{seq {set - <digit><digit> <digit><digit>}} -> {seq {set - 10 23}} (12)
 |#
 
 #|///////////////////////////////|#
