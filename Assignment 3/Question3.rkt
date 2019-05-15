@@ -91,9 +91,9 @@
   [MyRegE Bit-List]
   [myBool Boolean])
 
-#|///////////////////////////////|#
-#|QUESTION 2 -> about 10 minutes.|#
-#|///////////////////////////////|#
+#|////////////////////////////|#
+#|QUESTION 3 -> about 1 hours.|#
+#|////////////////////////////|#
 
 ;;difficulties: Use of the syntax of Racket and get good readability on the code.
 
@@ -118,12 +118,88 @@
                (subst bound-body from to)))]
     [(Geq l r) (Geq (subst l from to) (subst r from to))]
     [(Maj l r) (Maj (subst l from to) (subst r from to))]
-    [(If l m r) (If (subst l from to)(subst m from to) (subst r from to))]   
+    [(If l m r) (If (subst l from to) (subst m from to) (subst r from to))]   
+    ))
+
+#|////////////////////////////|#
+#|QUESTION 4 -> about 2 hours.|#
+#|////////////////////////////|#
+
+;;difficulties: Use of the syntax of Racket and get good readability on the code.
+
+(: eval : RegE -> RES)
+;; evaluates RegE expressions by reducing them to bit-lists
+(define (eval expr)
+  (cases expr
+
+    [(Reg reg) reg]
+    [(Bool bl) bl]
+    ;;[(Bool true) true] ;; maybe #t
+    ;;[(Bool false) false]  ;; maybe #f
+    [(And list1 list2) (And (eval list1) (eval list2))] 
+    [(Or list1 list2) (Or (eval list1) (eval list2))] 
+    [(Shl list) (Shl (eval list))]
+    [(With bound-id named-expr bound-body)
+     (eval (subst bound-body
+                  bound-id
+                  (Reg (eval named-expr))))]
+    [(If E1 E2 E3) (If (eval E1) (eval E2) (eval E3))]
+    [(Maj list1 list2) (Maj (eval list1) (eval list2))]  ;; nonsense
+    [(Geq list1 list2) (Geq (eval list1) (eval list2))]  ;; nonsense
+    [(Id name) (error 'eval "free identifier: ~s" name)]
     ))
 
 
 
+;; Defining functions for dealing with arithmetic operations
+;; on the above types
+#|
+(: bit-and : BIT BIT -> BIT) ;; Arithmetic and
+(define(bit-and a b)
+  < --fill in-- >)
+(: bit-or : BIT BIT -> BIT) ;; Aithmetic or
+(define(bit-or a b)
+  < --fill in-- >)
+(: reg-arith-op : (BIT BIT -> BIT) RES RES -> RES)
+;; Consumes two registers and some binary bit operation 'op',
+;; and returns the register obtained by applying op on the
+;; i'th bit of both registers for all i.
+(define(reg-arith-op op reg1 reg2)
+  (: bit-arith-op : Bit-List Bit-List -> Bit-List)
+  ;; Consumes two bit-lists and uses the binary bit operation 'op'.
+  ;; It returns the bit-list obtained by applying op on the
+  ;; i'th bit of both registers for all i.
+  (define(bit-arith-op bl1 bl2)
+    < --fill in-- >
+    (RegV (bit-arith-op (RegV->bit-list reg1) (RegV->bit-list reg2))))
+  (: majority? : Bit-List -> Boolean)
+  ;; Consumes a list of bits and checks whether the
+  ;; number of 1's are at least as the number of 0's.
+  (define(majority? bl)
+    < --fill in-- >)(: geq-bitlists? : Bit-List Bit-List -> Boolean)
+  ;; Consumes two bit-lists and compares them. It returns true if the
+  ;; first bit-list is larger or equal to the second.
+  (define (geq-bitlists? bl1 bl2)
+    < --fill in-- >)
+  (: shift-left : Bit-List -> Bit-List)
+  ;; Shifts left a list of bits (once)
+  (define(shift-left bl)
+    < --fill in-- >)
+  (: RegV->bit-list : RES -> Bit-List)
+  ;; extract a bit-list from RES type
+  < --fill in-- >)
+|#
+#|///////////////////////////|#
+#|QUESTION 5 -> about 1 hour.|#
+#|///////////////////////////|#
 
+;;difficulties: Use of the syntax of Racket and get good readability on the code.
+
+(: run : String -> Bit-List)
+;; evaluate a ROL program contained in a string
+;; we will not allow to return a boolean type
+(define (run str)
+  (eval (parse str)))
 
 ;; tests
 (test (run "{ reg-len = 4 {1 0 0 0}}") => '(1 0 0 0))
