@@ -18,7 +18,7 @@
            | {<BOOL>}
            | {if <RegE> <RegE> <RegE>}
            | {geq? <RegE> <RegE>}
-           | {maj? <RegE> <RegE>}
+           | {maj? <RegE>}
 <Bits> ::= <bit> | <bit> <Bits>
 <bit>::= 1 | 0
 |#
@@ -37,7 +37,7 @@
   [With Symbol RegE RegE]
   [Bool Boolean]
   [Geq RegE RegE]
-  [Maj RegE RegE]
+  [Maj RegE]
   [If RegE RegE RegE])
 ;; Next is a technical function that converts (casts)
 ;; (any) list into a bit-list. We use it in parse-sexpr.
@@ -53,7 +53,7 @@
     [(list 'reg-len = (number: n) args)
      (if (> n 0) ;; remember to make sure specified register length is at least 1
          (parse-sexpr-RegL args n)
-         (error 'parse-sexpr "Register length must be at least 1" sexpr) )] 
+         (error 'parse-sexpr "Register length must be at least 1 ~s" sexpr) )]
     [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))
 (: parse-sexpr-RegL : Sexpr Number -> RegE)
 ;; to convert s-expressions into RegEs
@@ -72,8 +72,8 @@
         (With oldName (parse-sexpr-RegL newName reg-len) (parse-sexpr-RegL body reg-len))]
        [else (error 'parse-sexpr-RegE "bad `with' syntax in ~s" sexpr)])]
     [(boolean: b) (Bool b)]
-    [(list 'geq list1 list2) (Geq (parse-sexpr-RegL list1 reg-len) (parse-sexpr-RegL list2 reg-len))]
-    [(list 'maj list1 list2) (Maj (parse-sexpr-RegL list1 reg-len) (parse-sexpr-RegL list2 reg-len))]
+    [(list 'geq? list1 list2) (Geq (parse-sexpr-RegL list1 reg-len) (parse-sexpr-RegL list2 reg-len))]
+    [(list 'maj? list) (Maj (parse-sexpr-RegL list reg-len))]
     [(list 'if list1 list2 list3) (If (parse-sexpr-RegL list1 reg-len) (parse-sexpr-RegL list2 reg-len) (parse-sexpr-RegL list3 reg-len))]
     [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))
 (: parse : String -> RegE)
@@ -88,8 +88,8 @@
 ;;difficulties: Use of the syntax of Racket and get good readability on the code.
 
 (define-type RES
-  [MyRegE Bit-List]
-  [myBool Boolean])
+  [RegV Bit-List]
+  [MyBool Boolean])
 
 #|////////////////////////////|#
 #|QUESTION 3 -> about 1 hours.|#
@@ -117,7 +117,7 @@
                bound-body
                (subst bound-body from to)))]
     [(Geq l r) (Geq (subst l from to) (subst r from to))]
-    [(Maj l r) (Maj (subst l from to) (subst r from to))]
+    [(Maj list) (Maj (subst list from to))]
     [(If l m r) (If (subst l from to) (subst m from to) (subst r from to))]   
     ))
 
@@ -131,35 +131,36 @@
 ;; evaluates RegE expressions by reducing them to bit-lists
 (define (eval expr)
   (cases expr
-
-    [(Reg reg) reg]
-    [(Bool bl) bl]
-    ;;[(Bool true) true] ;; maybe #t
-    ;;[(Bool false) false]  ;; maybe #f
-    [(And list1 list2) (And (eval list1) (eval list2))] 
-    [(Or list1 list2) (Or (eval list1) (eval list2))] 
-    [(Shl list) (Shl (eval list))]
+    [(Reg reg) (RegV reg)]
+    [(Bool bl) (MyBool bl)]
+    [(And list1 list2) (reg-arith-op bit-and (eval list1) (eval list2))]
+    [(Or list1 list2) (reg-arith-op bit-and (eval list1) (eval list2))]
+    [(Shl list) (RegV (shift-left (RegV->bit-list (eval list))))]
     [(With bound-id named-expr bound-body)
      (eval (subst bound-body
                   bound-id
-                  (Reg (eval named-expr))))]
-    [(If E1 E2 E3) (If (eval E1) (eval E2) (eval E3))]
-    [(Maj list1 list2) (Maj (eval list1) (eval list2))]  ;; nonsense
-    [(Geq list1 list2) (Geq (eval list1) (eval list2))]  ;; nonsense
-    [(Id name) (error 'eval "free identifier: ~s" name)]
-    ))
-
-
-
+                  (cases (eval named-expr)
+                    [(RegV reg) (Reg reg)]
+                    [(MyBool b) (Bool b)])))]
+    [(If E1 E2 E3) (if (cases (eval E2)
+                         [(MyBool myBool) myBool]
+                         [else #t]) (eval E2) (eval E3))]
+    [(Maj list1) (MyBool (majority? (RegV->bit-list (eval list1))))]
+    [(Geq list1 list2) (MyBool (geq-bitlists? (RegV->bit-list (eval list1)) (RegV->bit-list (eval list2))))]
+    [(Id name) (error 'eval "free identifier: ~s" name)]))
+  
 ;; Defining functions for dealing with arithmetic operations
 ;; on the above types
-#|
 (: bit-and : BIT BIT -> BIT) ;; Arithmetic and
 (define(bit-and a b)
-  < --fill in-- >)
+  (cond
+    [(eq? a 1) (if (eq? b 1) 1 0)]
+    [else 0])) ;; not used actually.
 (: bit-or : BIT BIT -> BIT) ;; Aithmetic or
 (define(bit-or a b)
-  < --fill in-- >)
+  (cond
+    [(eq? a 0) (if (eq? b 0) 0 1)]
+    [else 1])) ;; not used actually.
 (: reg-arith-op : (BIT BIT -> BIT) RES RES -> RES)
 ;; Consumes two registers and some binary bit operation 'op',
 ;; and returns the register obtained by applying op on the
@@ -170,25 +171,35 @@
   ;; It returns the bit-list obtained by applying op on the
   ;; i'th bit of both registers for all i.
   (define(bit-arith-op bl1 bl2)
-    < --fill in-- >
-    (RegV (bit-arith-op (RegV->bit-list reg1) (RegV->bit-list reg2))))
-  (: majority? : Bit-List -> Boolean)
-  ;; Consumes a list of bits and checks whether the
-  ;; number of 1's are at least as the number of 0's.
-  (define(majority? bl)
-    < --fill in-- >)(: geq-bitlists? : Bit-List Bit-List -> Boolean)
-  ;; Consumes two bit-lists and compares them. It returns true if the
-  ;; first bit-list is larger or equal to the second.
-  (define (geq-bitlists? bl1 bl2)
-    < --fill in-- >)
-  (: shift-left : Bit-List -> Bit-List)
-  ;; Shifts left a list of bits (once)
-  (define(shift-left bl)
-    < --fill in-- >)
-  (: RegV->bit-list : RES -> Bit-List)
-  ;; extract a bit-list from RES type
-  < --fill in-- >)
-|#
+    (map op bl1 bl2))
+  (RegV (bit-arith-op (RegV->bit-list reg1) (RegV->bit-list reg2))))
+(: majority? : Bit-List -> Boolean)
+;; Consumes a list of bits and checks whether the
+;; number of 1's are at least as the number of 0's.
+(define(majority? bl)
+  (if (>= (foldl + 0 bl) (/ (length bl) 2)) #t #f))
+(: geq-bitlists? : Bit-List Bit-List -> Boolean)
+;; Consumes two bit-lists and compares them. It returns true if the
+;; first bit-list is larger or equal to the second.
+(define (geq-bitlists? bl1 bl2)
+  (cond
+    [(null? bl1) (if (null? bl2) #t #f)]
+    [(null? bl2) #t]
+    [(eq? (first bl1) 1) (if (eq? (first bl2) 1) (geq-bitlists? (rest bl1) (rest bl2)) #t)]
+    [(eq? (first bl2) 1)  #f]
+    [else (geq-bitlists? (rest bl1) (rest bl2))]))
+
+(: shift-left : Bit-List -> Bit-List)
+;; Shifts left a list of bits (once)
+(define(shift-left bl)
+  (append (rest bl) (list (first  bl))))
+(: RegV->bit-list : RES -> Bit-List)
+;; extract a bit-list from RES type
+(define (RegV->bit-list res)
+  (cases res
+    [(RegV bl) bl]
+    [(MyBool myBool) (error RegV->bit-list "run must return a bit-list ~s" myBool)]))
+
 #|///////////////////////////|#
 #|QUESTION 5 -> about 1 hour.|#
 #|///////////////////////////|#
@@ -198,8 +209,9 @@
 (: run : String -> Bit-List)
 ;; evaluate a ROL program contained in a string
 ;; we will not allow to return a boolean type
+(: run : String -> Bit-List)
 (define (run str)
-  (eval (parse str)))
+  (RegV->bit-list (eval(parse str))))
 
 ;; tests
 (test (run "{ reg-len = 4 {1 0 0 0}}") => '(1 0 0 0))
