@@ -59,6 +59,8 @@
 ;; to convert s-expressions into RegEs
 (define (parse-sexpr-RegL sexpr reg-len)
   (match sexpr
+    ['true (Bool #t)]
+    ['false (Bool #f)]
     [(list (and a (or 1 0)) ... ) (if (= reg-len (length a))
                                       (Reg (list->bit-list a))
                                       (error 'parse-sexpr-RegE "wrong number of bits in ~s" a))] ;; from the slides (changing the given code).
@@ -106,7 +108,7 @@
 
     [(Reg n) expr]
     [(Bool b) expr]
-    [(And l r) (And (subst l from to) (subst r from to))]
+    [(And l r) (And (subst l from to) (subst r from to))] 
     [(Or l r) (Or (subst l from to) (subst r from to))]
     [(Shl s) (Shl (subst s from to))]
     [(Id name) (if (eq? name from) to expr)]
@@ -134,7 +136,7 @@
     [(Reg reg) (RegV reg)]
     [(Bool bl) (MyBool bl)]
     [(And list1 list2) (reg-arith-op bit-and (eval list1) (eval list2))]
-    [(Or list1 list2) (reg-arith-op bit-and (eval list1) (eval list2))]
+    [(Or list1 list2) (reg-arith-op bit-or (eval list1) (eval list2))]
     [(Shl list) (RegV (shift-left (RegV->bit-list (eval list))))]
     [(With bound-id named-expr bound-body)
      (eval (subst bound-body
@@ -142,7 +144,7 @@
                   (cases (eval named-expr)
                     [(RegV reg) (Reg reg)]
                     [(MyBool b) (Bool b)])))]
-    [(If E1 E2 E3) (if (cases (eval E2)
+    [(If E1 E2 E3) (if (cases (eval E1)
                          [(MyBool myBool) myBool]
                          [else #t]) (eval E2) (eval E3))]
     [(Maj list1) (MyBool (majority? (RegV->bit-list (eval list1))))]
@@ -175,7 +177,7 @@
   (RegV (bit-arith-op (RegV->bit-list reg1) (RegV->bit-list reg2))))
 (: majority? : Bit-List -> Boolean)
 ;; Consumes a list of bits and checks whether the
-;; number of 1's are at least as the number of 0's.
+;; number of 1's are at least as the number of 0's. 
 (define(majority? bl)
   (if (>= (foldl + 0 bl) (/ (length bl) 2)) #t #f))
 (: geq-bitlists? : Bit-List Bit-List -> Boolean)
@@ -183,8 +185,7 @@
 ;; first bit-list is larger or equal to the second.
 (define (geq-bitlists? bl1 bl2)
   (cond
-    [(null? bl1) (if (null? bl2) #t #f)]
-    [(null? bl2) #t]
+    [(null? bl1) #t]  ;; So is bl2.
     [(eq? (first bl1) 1) (if (eq? (first bl2) 1) (geq-bitlists? (rest bl1) (rest bl2)) #t)]
     [(eq? (first bl2) 1)  #f]
     [else (geq-bitlists? (rest bl1) (rest bl2))]))
@@ -219,12 +220,35 @@
 (test (run "{ reg-len = 4 {and {shl {1 0 1 0}}{shl {1 0 1 0}}}}") =>'(0 1 0 1))
 (test (run "{ reg-len = 4 {1 0 0 0}}") => '(1 0 0 0))
 (test (run "{ reg-len = 4 {shl {1 0 0 0}}}") => '(0 0 0 1))
-(test (run "{ reg-len = 4{and {shl {1 0 1 0}}{shl {1 0 1 0}}}}") =>'(0 1 0 1))
-(test (run "{ reg-len = 2{ or {and {shl {1 0}} {1 0}} {1 0}}}") =>'(1 0))
+(test (run "{ reg-len = 4 {and {shl {1 0 1 0}}{shl {1 0 1 0}}}}") =>'(0 1 0 1))
+(test (run "{ reg-len = 2 {and {shl {1 0}} {1 0}}}") =>'(0 0))
+(test (run "{ reg-len = 2 {or {0 0} {1 0}}}") =>'(1 0))
 (test (run "{ reg-len = 4 {with {x {1 1 1 1}} {shl y}}}")=error> "free identifier: y")
-(test (run "{ reg-len = 2{ with {x { or {and {shl {1 0}}{1 0}}{1 0}}}{shl x}}}") => '(0 1))
-(test (run "{ reg-len = 4{or {1 1 1 1} {0 1 1}}}") =error>"wrong number of bits in (0 1 1)")
+(test (run "{ reg-len = 2 {with {x { or {and {shl {1 0}}{1 0}}{1 0}}}{shl x}}}") => '(0 1))
+(test (run "{ reg-len = 4 {or {1 1 1 1} {0 1 1}}}") =error>"wrong number of bits in (0 1 1)")
 (test (run "{ reg-len = 0 {}}") =error>"Register length must be at least 1")
-(test (run "{ reg-len = 3{if {geq? {1 0 1} {1 1 1}}{0 0 1}{1 1 0}}}") => '(1 1 0))
-(test (run "{ reg-len = 4{if {maj? {0 0 1 1}}{shl {1 0 1 1}}{1 1 0 1}}}")=> '(0 1 1 1))
-(test (run "{ reg-len = 4{if false {shl {1 0 1 1}} {1 1 0 1}}}") =>'(1 1 0 1))
+(test (run "{ reg-len = 2 {if false {0 0} {1 1}}}") => '(1 1))
+(test (run "{ reg-len = 4 {if false {shl {1 0 1 1}} {shl {1 0 1 1}}}}") =>'(0 1 1 1))
+
+(test (run "{ reg-len = 4 {if {maj? {0 0 1 1}}{shl {1 0 1 1}}{1 1 0 1}}}")=> '(0 1 1 1))
+(test (run "{ reg-len = 4 {if false {shl {1 0 1 1}} {1 1 0 1}}}") => '(1 1 0 1))
+(test (run "{ reg-len = 4 {if true {shl {1 0 1 1}} {1 1 0 1}}}") => '(0 1 1 1))
+(test (run "{ reg-len = salut {with {x {1 1 1 1}} {shl y}}}")=error> "parse-sexpr: bad syntax in (reg-len = salut (with (x (1 1 1 1)) (shl y)))")
+(test (run "{ reg-len = 4 {with {x buuuug bug}}}")=error> "parse-sexpr-RegE: bad `with' syntax in (with (x buuuug bug))")
+(test (run "{ reg-len = 2 {if {maj? {0 0}}{0 1} {0 1}}}") =>'(0 1))
+(test (run "{ reg-len = 2 {if {geq? {0 0}{1 1}}{0 1} {0 1}}}") =>'(0 1))
+(test (run "{ reg-len = 2 {buuug}}")=error> "parse-sexpr: bad syntax in (buuug)")
+(test (run "{ reg-len = 2 {maj? {0 0}}}")=error> "#<procedure:RegV->bit-list>: run must return a bit-list #f")
+(test (run "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{maj? x}}}")=error> "#<procedure:RegV->bit-list>: run must return a bit-list #t")
+(test (run "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{or {0 1} {0 1}}}}") =>'(0 1))
+(test (run "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{and {0 1} {0 1}}}}") =>'(0 1))
+(test (run "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{bool buug}}}")=error> "parse-sexpr: bad syntax in (bool buug)")
+(test (run "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{geq? {0 0}{1 1}}}}")=error> "#<procedure:RegV->bit-list>: run must return a bit-list #f")
+(test (run "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{if false {1 0} {0 1}}}}")=>'(0 1))
+(test (run "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{if false {1 0} {0 1}}}}}")=>'(0 1))
+(test (run "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{with {x {and {and {and {0 0} {0 0}}{1 0}}{1 0}}}{if true {1 0} {1 1}}}}}")=>'(1 0))
+(test (run "{ reg-len = 2 {if {geq? {0 0}{1 1}}{0 1} {0 1}}}") =>'(0 1))
+(test (run "{ reg-len = 2 {if {geq? {1 1}{0 0}}{0 1} {0 1}}}") =>'(0 1))
+(test (run "{ reg-len = 2 {if {geq? {1 0}{0 1}}{0 1} {0 1}}}") =>'(0 1))
+(test (run "{ reg-len = 1 {if {geq? {1}{1}}{1} {1}}}") =>'(1))
+(test (run "{ reg-len = 1 {if {geq? {0}{0}}{0} {0}}}") =>'(0))
