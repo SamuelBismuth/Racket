@@ -73,7 +73,6 @@
        [(list 'with (list (symbol: oldName) newName) body)
         (With oldName (parse-sexpr-RegL newName reg-len) (parse-sexpr-RegL body reg-len))]
        [else (error 'parse-sexpr-RegE "bad `with' syntax in ~s" sexpr)])]
-    [(boolean: b) (Bool b)]
     [(list 'geq? list1 list2) (Geq (parse-sexpr-RegL list1 reg-len) (parse-sexpr-RegL list2 reg-len))]
     [(list 'maj? list) (Maj (parse-sexpr-RegL list reg-len))]
     [(list 'if list1 list2 list3) (If (parse-sexpr-RegL list1 reg-len) (parse-sexpr-RegL list2 reg-len) (parse-sexpr-RegL list3 reg-len))]
@@ -87,7 +86,7 @@
 #|QUESTION 2 -> about 10 minutes.|#
 #|///////////////////////////////|#
 
-;;difficulties: Use of the syntax of Racket and get good readability on the code.
+;;difficulties: Nothing in particular, this question was pretty simple.
 
 (define-type RES
   [RegV Bit-List]
@@ -97,7 +96,9 @@
 #|QUESTION 3 -> about 1 hours.|#
 #|////////////////////////////|#
 
-;;difficulties: Use of the syntax of Racket and get good readability on the code.
+;;difficulties: At the beginning, implementing this question wasn't that hard, but
+;; at the time of the test and when I had to achieve a full coverage, I need to understand better how it's work.
+;; Then, after a lot of test I do success to full cover the constructor.
 
 (: subst : RegE Symbol RegE -> RegE)
 ;; substitutes the second argument with the third argument in the
@@ -105,7 +106,6 @@
 ;; expression contains no free instances of the second argument
 (define (subst expr from to)
   (cases expr
-
     [(Reg n) expr]
     [(Bool b) expr]
     [(And l r) (And (subst l from to) (subst r from to))] 
@@ -127,7 +127,9 @@
 #|QUESTION 4 -> about 2 hours.|#
 #|////////////////////////////|#
 
-;;difficulties: Use of the syntax of Racket and get good readability on the code.
+;;difficulties: The implementation of all the function ask a good understanding of all the use
+;; of the define we already implements, so that was a little bit hard.
+;; Testing the function was actually easy since I did understand them good.
 
 (: eval : RegE -> RES)
 ;; evaluates RegE expressions by reducing them to bit-lists
@@ -201,11 +203,11 @@
     [(RegV bl) bl]
     [(MyBool myBool) (error RegV->bit-list "run must return a bit-list ~s" myBool)]))
 
-#|///////////////////////////|#
-#|QUESTION 5 -> about 1 hour.|#
-#|///////////////////////////|#
+#|///////////////////////////////|#
+#|QUESTION 5 -> about 10 minutes.|#
+#|///////////////////////////////|#
 
-;;difficulties: Use of the syntax of Racket and get good readability on the code.
+;;difficulties: Easy question: nothing in particular.
 
 (: run : String -> Bit-List)
 ;; evaluate a ROL program contained in a string
@@ -214,7 +216,7 @@
 (define (run str)
   (RegV->bit-list (eval(parse str))))
 
-;; tests
+;; 39 tests that full achieve a full coverage of the above script.
 (test (run "{ reg-len = 4 {1 0 0 0}}") => '(1 0 0 0))
 (test (run "{ reg-len = 4 {shl {1 0 0 0}}}") => '(0 0 0 1))
 (test (run "{ reg-len = 4 {and {shl {1 0 1 0}}{shl {1 0 1 0}}}}") =>'(0 1 0 1))
@@ -229,7 +231,6 @@
 (test (run "{ reg-len = 0 {}}") =error>"Register length must be at least 1")
 (test (run "{ reg-len = 2 {if false {0 0} {1 1}}}") => '(1 1))
 (test (run "{ reg-len = 4 {if false {shl {1 0 1 1}} {shl {1 0 1 1}}}}") =>'(0 1 1 1))
-
 (test (run "{ reg-len = 4 {if {maj? {0 0 1 1}}{shl {1 0 1 1}}{1 1 0 1}}}")=> '(0 1 1 1))
 (test (run "{ reg-len = 4 {if false {shl {1 0 1 1}} {1 1 0 1}}}") => '(1 1 0 1))
 (test (run "{ reg-len = 4 {if true {shl {1 0 1 1}} {1 1 0 1}}}") => '(0 1 1 1))
@@ -252,3 +253,6 @@
 (test (run "{ reg-len = 2 {if {geq? {1 0}{0 1}}{0 1} {0 1}}}") =>'(0 1))
 (test (run "{ reg-len = 1 {if {geq? {1}{1}}{1} {1}}}") =>'(1))
 (test (run "{ reg-len = 1 {if {geq? {0}{0}}{0} {0}}}") =>'(0))
+(test (run "{ reg-len = 1 {if {0} {0} {1}}}") =>'(0))
+(test (run "{ reg-len = 2 {if {with {x true} x} {0 0} {1 1}}}")=>'(0 0))
+(test (run "{ reg-len = 2 {if {with {x true} {with {y x} y}} {0 0} {1 1}}}")=>'(0 0))
