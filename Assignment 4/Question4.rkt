@@ -1,6 +1,11 @@
+#lang pl
+
 ;; The Flang interpreter – supporting both the substitution model and
 ;; the substitution-cache model
-#lang pl
+
+#|//////////////////////////////|#
+#|PREVIOUS ASSIGNMENT!!!!!!!!!!.|#
+#|//////////////////////////////|#
 
 #|//////////////////////////////|#
 #|QUESTION 1 -> about two hours.|#
@@ -241,60 +246,18 @@
 (define (runFROL str)
   (RegV->bit-list (evalFROL(parseFROL str))))
 
-;; 39 tests that full achieve a full coverage of the above script.
-(test (runFROL "{ reg-len = 4 {1 0 0 0}}") => '(1 0 0 0))
-(test (runFROL "{ reg-len = 4 {shl {1 0 0 0}}}") => '(0 0 0 1))
-(test (runFROL "{ reg-len = 4 {and {shl {1 0 1 0}}{shl {1 0 1 0}}}}") =>'(0 1 0 1))
-(test (runFROL "{ reg-len = 4 {1 0 0 0}}") => '(1 0 0 0))
-(test (runFROL "{ reg-len = 4 {shl {1 0 0 0}}}") => '(0 0 0 1))
-(test (runFROL "{ reg-len = 4 {and {shl {1 0 1 0}}{shl {1 0 1 0}}}}") =>'(0 1 0 1))
-(test (runFROL "{ reg-len = 2 {and {shl {1 0}} {1 0}}}") =>'(0 0))
-(test (runFROL "{ reg-len = 2 {or {0 0} {1 0}}}") =>'(1 0))
-(test (runFROL "{ reg-len = 4 {with {x {1 1 1 1}} {shl y}}}")=error> "free identifier: y")
-(test (runFROL "{ reg-len = 2 {with {x { or {and {shl {1 0}}{1 0}}{1 0}}}{shl x}}}") => '(0 1))
-(test (runFROL "{ reg-len = 4 {or {1 1 1 1} {0 1 1}}}") =error>"wrong number of bits in (0 1 1)")
-(test (runFROL "{ reg-len = 0 {}}") =error>"Register length must be at least 1")
-(test (runFROL "{ reg-len = 2 {if false {0 0} {1 1}}}") => '(1 1))
-(test (runFROL "{ reg-len = 4 {if false {shl {1 0 1 1}} {shl {1 0 1 1}}}}") =>'(0 1 1 1))
-(test (runFROL "{ reg-len = 4 {if {maj? {0 0 1 1}}{shl {1 0 1 1}}{1 1 0 1}}}")=> '(0 1 1 1))
-(test (runFROL "{ reg-len = 4 {if false {shl {1 0 1 1}} {1 1 0 1}}}") => '(1 1 0 1))
-(test (runFROL "{ reg-len = 4 {if true {shl {1 0 1 1}} {1 1 0 1}}}") => '(0 1 1 1))
-(test (runFROL "{ reg-len = salut {with {x {1 1 1 1}} {shl y}}}")=error> "parse-sexprFROL: bad syntax in (reg-len = salut (with (x (1 1 1 1)) (shl y)))")
-(test (runFROL "{ reg-len = 4 {with {x buuuug bug}}}")=error> "parse-sexpr-RegE: bad `with' syntax in (with (x buuuug bug))")
-(test (runFROL "{ reg-len = 2 {if {maj? {0 0}}{0 1} {0 1}}}") =>'(0 1))
-(test (runFROL "{ reg-len = 2 {if {geq? {0 0}{1 1}}{0 1} {0 1}}}") =>'(0 1))
-(test (runFROL "{ reg-len = 2 {buuug}}")=error> "parse-sexprFROL: bad syntax in (buuug)")
-(test (runFROL "{ reg-len = 2 {maj? {0 0}}}")=error> "#<procedure:RegV->bit-list>: run must return a bit-list")
-(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{maj? x}}}")=error> "#<procedure:RegV->bit-list>: run must return a bit-list")
-(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{or {0 1} {0 1}}}}") =>'(0 1))
-(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{and {0 1} {0 1}}}}") =>'(0 1))
-(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{bool buug}}}")=error> "parse-sexprFROL: bad syntax in (bool buug)")
-(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{geq? {0 0}{1 1}}}}")=error> "#<procedure:RegV->bit-list>: run must return a bit-list")
-(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{if false {1 0} {0 1}}}}")=>'(0 1))
-(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{if false {1 0} {0 1}}}}}")=>'(0 1))
-(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{with {x {and {and {and {0 0} {0 0}}{1 0}}{1 0}}}{if true {1 0} {1 1}}}}}")=>'(1 0))
-(test (runFROL "{ reg-len = 2 {if {geq? {0 0}{1 1}}{0 1} {0 1}}}") =>'(0 1))
-(test (runFROL "{ reg-len = 2 {if {geq? {1 1}{0 0}}{0 1} {0 1}}}") =>'(0 1))
-(test (runFROL "{ reg-len = 2 {if {geq? {1 0}{0 1}}{0 1} {0 1}}}") =>'(0 1))
-(test (runFROL "{ reg-len = 1 {if {geq? {1}{1}}{1} {1}}}") =>'(1))
-(test (runFROL "{ reg-len = 1 {if {geq? {0}{0}}{0} {0}}}") =>'(0))
-(test (runFROL "{ reg-len = 1 {if {0} {0} {1}}}") =>'(0))
-(test (runFROL "{ reg-len = 2 {if {with {x true} x} {0 0} {1 1}}}")=>'(0 0))
-(test (runFROL "{ reg-len = 2 {if {with {x true} {with {y x} y}} {0 0} {1 1}}}")=>'(0 0))
+#|///////////////////////////////|#
+#|CURRENT ASSIGNMENT !!!!!!!!!!!.|#
+#|///////////////////////////////|#
 
+;;difficulties: Easy question: nothing in particular.v
+#|////////////////////////////|#
+#|QUESTION 1 -> about 2 hours.|#
+#|////////////////////////////|#
 
-(test (runFROL "{ reg-len = 3 {with {identity {fun {x} x}} {with {foo {fun {x} {or x {1 1 0}}}} {call {call identity foo} {0 1 0}}}}}") => '(1 1 0))
-(test (runFROL "{ reg-len = 3 {with {x {0 0 1}} {with {f {fun {y} {and x y}}} {with {x {0 0 0}} {call f {1 1 1}}}}}}") => '(0 0 1))
-(test (runFROL "{ reg-len = 4 {with {foo {fun {z} {if {maj? z} z {shl z}}}} {call foo {if {maj? {0 0 1 1}} {shl {1 0 1 1}} {1 1 0 1}}}}}") => '(0 1 1 1))
-
-
-
-
-
-
-
-
-
+;;difficulties: Need first to understand the question, it took a lot of time since I got confused with the given code and we were supposed to do.
+;; Then, need to go over the errors and fixed them one by one until there is no more error.
+;; A little bit of dark work aslo took time.
 
 ;; The Flang interpreter – supporting both the substitution model and
 ;; the substitution-cache model
@@ -421,27 +384,8 @@ The grammar:
   (let ([result (eval (parse str))])
     (cases result
       [(Num n) n]
-      [else (error 'run
-                   "evaluation returned a non-number: ~s" result)])))
-;; tests
-(test (run "{call {fun {x} {+ x 1}} 4}")
-      => 5)
-(test (run "{with {add3 {fun {x} {+ x 3}}}
-{call add3 1}}")
-      => 4)
-(test (run "{with {add3 {fun {x} {+ x 3}}}
-{with {add1 {fun {x} {+ x 1}}}
-{with {x 3}
-{call add1 {call add3 x}}}}}")
-      => 7)
-(test (run "{with {identity {fun {x} x}}
-{with {foo {fun {x} {+ x 1}}}
-{call {call identity foo} 123}}}")
-      => 124)
-(test (run "{call {call {fun {x} {call x 1}}
-{fun {x} {fun {y} {+ x y}}}}
-123}")
-      => 124)
+      [else (error 'run "evaluation returned a non-number: ~s" result)])))
+
 
 ;;;;;; The evaluation part for the substitution cache model
 ;; a type for substitution caches:
@@ -482,16 +426,22 @@ The grammar:
              [(Fun bound-id bound-body)
               (evalSC bound-body
                       (extend bound-id (evalSC arg-expr sc) sc))]
-             [else (error 'evalSC "`call' expects a function, got: ~s"
-                          fval)]))])))
+             [else (error 'evalSC "`call' expects a function, got: ~s" fval)]))])))
+
 (: runSC : String -> Number)
 ;; evaluate a FLANG program contained in a string
 (define (runSC str)
   (let ([result (evalSC (parse str) empty-subst)])
     (cases result
       [(Num n) n]
-      [else (error 'runSC
-                   "evaluation returned a non-number: ~s" result)])))
+      [else (error 'runSC "evaluation returned a non-number: ~s" result)])))
+
+#|/////////////////////////////|#
+#|QUESTION 2 -> about one hour.|#
+#|/////////////////////////////|#
+
+;;difficulties: Need a deep understanding of the FLANG in general, and then, find the hint for the recursion.
+;; Really nice question, I liked it.
 
 (: countFreeSingle : FLANG Symbol -> Natural)
 (define (countFreeSingle flang name)
@@ -512,29 +462,18 @@ The grammar:
 (: CFSingle : String Symbol -> Natural)
 (define (CFSingle expr name)
   (countFreeSingle (parse expr) name))
-(test (CFSingle "{+ r r}" 'r) => 2)
-(test (CFSingle "{fun {r} {+ r e}}" 'e) => 1)
-(test (CFSingle "{fun {r} {+ r e}}" 'r) => 0)
-(test (CFSingle "{call {fun {r} {+ r e}}
-{with {e {+ e r}}
-{fun {x} {+ e r}}}}"
-                'r) => 2)
-(test (CFSingle "{call {fun {r} {+ r e}}
-{with {e {+ e r}}
-{fun {x} {+ e r}}}}"'e) => 2)
 
+#|Explanation|#
 
-#|Explaination|#
-
-;; return 1
 ;; (CFSingle "{with {foo {fun {y} {+ x y}}}
 ;; {with {x 4}
 ;; {call foo 3}}}" 'x)
+;; return 1
 
-;; return 7
 ;; (run "{with {foo {fun {y} {+ x y}}}
 ;; {with {x 4}
 ;; {call foo 3}}}")
+;; return 7
 
 #|
 Here is the function:
@@ -555,6 +494,69 @@ This is explained by the x at the beginning that is considered as a free identif
 Then, the function must count the x as a free identify, but be carefull, after the running of the function with it will not be a free identify anymore!
 |#
 
+#|/////////////////////////////|#
+#|QUESTION 3 -> about one hour.|#
+#|/////////////////////////////|#
+
+;;difficulties: First I wanted to implement a test case with a function that called itself.
+;; I actually passed the first test but not the second...
+;; After a lot of tries, I conclude that I needed a second with and then, it works bh.
+;; This question too is a really nice question, I liked it.
+
 (define loop "{with {Samuel {fun {x} {call f x}}} {with {f {fun {x} {call Samuel x}}} {call Samuel f}}}")
+
+;; 54 tests.
+(test (runFROL "{ reg-len = 4 {1 0 0 0}}") => '(1 0 0 0))
+(test (runFROL "{ reg-len = 4 {shl {1 0 0 0}}}") => '(0 0 0 1))
+(test (runFROL "{ reg-len = 4 {and {shl {1 0 1 0}}{shl {1 0 1 0}}}}") =>'(0 1 0 1))
+(test (runFROL "{ reg-len = 4 {1 0 0 0}}") => '(1 0 0 0))
+(test (runFROL "{ reg-len = 4 {shl {1 0 0 0}}}") => '(0 0 0 1))
+(test (runFROL "{ reg-len = 4 {and {shl {1 0 1 0}}{shl {1 0 1 0}}}}") =>'(0 1 0 1))
+(test (runFROL "{ reg-len = 2 {and {shl {1 0}} {1 0}}}") =>'(0 0))
+(test (runFROL "{ reg-len = 2 {or {0 0} {1 0}}}") =>'(1 0))
+(test (runFROL "{ reg-len = 4 {with {x {1 1 1 1}} {shl y}}}")=error> "free identifier: y")
+(test (runFROL "{ reg-len = 2 {with {x { or {and {shl {1 0}}{1 0}}{1 0}}}{shl x}}}") => '(0 1))
+(test (runFROL "{ reg-len = 4 {or {1 1 1 1} {0 1 1}}}") =error>"wrong number of bits in (0 1 1)")
+(test (runFROL "{ reg-len = 0 {}}") =error>"Register length must be at least 1")
+(test (runFROL "{ reg-len = 2 {if false {0 0} {1 1}}}") => '(1 1))
+(test (runFROL "{ reg-len = 4 {if false {shl {1 0 1 1}} {shl {1 0 1 1}}}}") =>'(0 1 1 1))
+(test (runFROL "{ reg-len = 4 {if {maj? {0 0 1 1}}{shl {1 0 1 1}}{1 1 0 1}}}")=> '(0 1 1 1))
+(test (runFROL "{ reg-len = 4 {if false {shl {1 0 1 1}} {1 1 0 1}}}") => '(1 1 0 1))
+(test (runFROL "{ reg-len = 4 {if true {shl {1 0 1 1}} {1 1 0 1}}}") => '(0 1 1 1))
+(test (runFROL "{ reg-len = salut {with {x {1 1 1 1}} {shl y}}}")=error> "parse-sexprFROL: bad syntax in (reg-len = salut (with (x (1 1 1 1)) (shl y)))")
+(test (runFROL "{ reg-len = 4 {with {x buuuug bug}}}")=error> "parse-sexpr-RegE: bad `with' syntax in (with (x buuuug bug))")
+(test (runFROL "{ reg-len = 2 {if {maj? {0 0}}{0 1} {0 1}}}") =>'(0 1))
+(test (runFROL "{ reg-len = 2 {if {geq? {0 0}{1 1}}{0 1} {0 1}}}") =>'(0 1))
+(test (runFROL "{ reg-len = 2 {buuug}}")=error> "parse-sexprFROL: bad syntax in (buuug)")
+(test (runFROL "{ reg-len = 2 {maj? {0 0}}}")=error> "#<procedure:RegV->bit-list>: run must return a bit-list")
+(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{maj? x}}}")=error> "#<procedure:RegV->bit-list>: run must return a bit-list")
+(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{or {0 1} {0 1}}}}") =>'(0 1))
+(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{and {0 1} {0 1}}}}") =>'(0 1))
+(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{bool buug}}}")=error> "parse-sexprFROL: bad syntax in (bool buug)")
+(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{geq? {0 0}{1 1}}}}")=error> "#<procedure:RegV->bit-list>: run must return a bit-list")
+(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{if false {1 0} {0 1}}}}")=>'(0 1))
+(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{if false {1 0} {0 1}}}}}")=>'(0 1))
+(test (runFROL "{ reg-len = 2 {with {x { or {and {or {1 0} {1 0}}{1 0}}{1 0}}}{with {x {and {and {and {0 0} {0 0}}{1 0}}{1 0}}}{if true {1 0} {1 1}}}}}")=>'(1 0))
+(test (runFROL "{ reg-len = 2 {if {geq? {0 0}{1 1}}{0 1} {0 1}}}") =>'(0 1))
+(test (runFROL "{ reg-len = 2 {if {geq? {1 1}{0 0}}{0 1} {0 1}}}") =>'(0 1))
+(test (runFROL "{ reg-len = 2 {if {geq? {1 0}{0 1}}{0 1} {0 1}}}") =>'(0 1))
+(test (runFROL "{ reg-len = 1 {if {geq? {1}{1}}{1} {1}}}") =>'(1))
+(test (runFROL "{ reg-len = 1 {if {geq? {0}{0}}{0} {0}}}") =>'(0))
+(test (runFROL "{ reg-len = 1 {if {0} {0} {1}}}") =>'(0))
+(test (runFROL "{ reg-len = 2 {if {with {x true} x} {0 0} {1 1}}}")=>'(0 0))
+(test (runFROL "{ reg-len = 2 {if {with {x true} {with {y x} y}} {0 0} {1 1}}}")=>'(0 0))
+(test (runFROL "{ reg-len = 3 {with {identity {fun {x} x}} {with {foo {fun {x} {or x {1 1 0}}}} {call {call identity foo} {0 1 0}}}}}") => '(1 1 0))
+(test (runFROL "{ reg-len = 3 {with {x {0 0 1}} {with {f {fun {y} {and x y}}} {with {x {0 0 0}} {call f {1 1 1}}}}}}") => '(0 0 1))
+(test (runFROL "{ reg-len = 4 {with {foo {fun {z} {if {maj? z} z {shl z}}}} {call foo {if {maj? {0 0 1 1}} {shl {1 0 1 1}} {1 1 0 1}}}}}") => '(0 1 1 1))
+(test (CFSingle "{+ r r}" 'r) => 2)
+(test (CFSingle "{fun {r} {+ r e}}" 'e) => 1)
+(test (CFSingle "{fun {r} {+ r e}}" 'r) => 0)
+(test (CFSingle "{call {fun {r} {+ r e}} {with {e {+ e r}} {fun {x} {+ e r}}}}"'r) => 2)
+(test (CFSingle "{call {fun {r} {+ r e}} {with {e {+ e r}} {fun {x} {+ e r}}}}"'e) => 2)
+(test (run "{call {fun {x} {+ x 1}} 4}") => 5)
+(test (run "{with {add3 {fun {x} {+ x 3}}} {call add3 1}}") => 4)
+(test (run "{with {add3 {fun {x} {+ x 3}}} {with {add1 {fun {x} {+ x 1}}} {with {x 3} {call add1 {call add3 x}}}}}") => 7)
+(test (run "{with {identity {fun {x} x}} {with {foo {fun {x} {+ x 1}}} {call {call identity foo} 123}}}") => 124)
+(test (run "{call {call {fun {x} {call x 1}} {fun {x} {fun {y} {+ x y}}}} 123}")=> 124)
 (test (runSC loop) =error> "exceeded 500 times") ;; subst-cache model
 (test (run loop) =error> "free identifier: f") ;; substitution model
