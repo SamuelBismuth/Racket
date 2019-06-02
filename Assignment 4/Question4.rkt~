@@ -1,0 +1,209 @@
+;; The Flang interpreter – supporting both the substitution model and
+;; the substitution-cache model
+#lang pl
+#|
+The grammar:
+<FLANG> ::=
+|
+|
+|
+|
+|
+|
+|
+|
+<num> 
+{ + <FLANG> <FLANG> }
+{ - <FLANG> <FLANG> }
+{ * <FLANG> <FLANG> }
+{ / <FLANG> <FLANG> }
+{ with { <id> <FLANG> } <FLANG> }
+<id>
+{ fun { <id> } <FLANG> }
+{ call <FLANG> <FLANG> }
+|#
+(define-type FLANG
+  [Num Number]
+  [Add FLANG FLANG]
+  [Sub FLANG FLANG]
+  [Mul FLANG FLANG]
+  [Div FLANG FLANG]
+  [Id Symbol]
+  [With Symbol FLANG FLANG]
+  [Fun Symbol FLANG]
+  [Call FLANG FLANG])
+(: parse-sexpr : Sexpr -> FLANG)
+;; to convert s-expressions into FLANGs
+(define (parse-sexpr sexpr)
+  (match sexpr
+    [(number: n)
+     (Num n)]
+    [(symbol: name) (Id name)]
+    [(cons 'with more)
+     (match sexpr
+       [(list 'with (list (symbol: name) named) body)
+        (With name (parse-sexpr named) (parse-sexpr body))]
+       [else (error 'parse-sexpr "bad `with' syntax in ~s" sexpr)])]
+    [(cons 'fun more)
+     (match sexpr
+       [(list 'fun (list (symbol: name)) body)
+        (Fun name (parse-sexpr body))]
+       [else (error 'parse-sexpr "bad `fun' syntax in ~s" sexpr)])]
+    [(list '+ lhs rhs) (Add (parse-sexpr lhs) (parse-sexpr rhs))]
+    [(list '- lhs rhs) (Sub (parse-sexpr lhs) (parse-sexpr rhs))]
+    [(list '* lhs rhs) (Mul (parse-sexpr lhs) (parse-sexpr rhs))]
+    [(list '/ lhs rhs) (Div (parse-sexpr lhs) (parse-sexpr rhs))]
+    [(list 'call fun arg) (Call (parse-sexpr fun) (parse-sexpr arg))]
+    [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))(: parse : String -> FLANG)
+;; parses a string containing a FLANG expression to a FLANG AST
+(define (parse str)
+  (parse-sexpr (string->sexpr str)))
+;;;;;;
+;; the evaluation part for the substitution model
+(: subst : FLANG Symbol FLANG -> FLANG)
+;; substitutes the second argument with the third argument in the
+;; first argument, as per the rules of substitution; the resulting
+;; expression contains no free instances of the second argument
+(define (subst expr from to)
+  (cases expr
+    [(Num n) expr]
+    [(Add l r) (Add (subst l from to) (subst r from to))]
+    [(Sub l r) (Sub (subst l from to) (subst r from to))]
+    [(Mul l r) (Mul (subst l from to) (subst r from to))]
+    [(Div l r) (Div (subst l from to) (subst r from to))]
+    [(Id name) (if (eq? name from) to expr)]
+    [(With bound-id named-expr bound-body)
+     (With bound-id
+           (subst named-expr from to)
+           (if (eq? bound-id from)
+               bound-body
+               (subst bound-body from to)))]
+    [(Call l r) (Call (subst l from to) (subst r from to))]
+    [(Fun bound-id bound-body)
+     (if (eq? bound-id from)
+         expr
+         (Fun bound-id (subst bound-body from to)))]))
+(: arith-op : (Number Number -> Number) FLANG FLANG -> FLANG)
+;; gets a Racket numeric binary operator, and uses it within a FLANG
+;; `Num' wrapper
+(define (arith-op op expr1 expr2)
+  (: Num->number : FLANG -> Number)
+  (define (Num->number e)
+    (cases e
+      [(Num n) n]
+      [else (error 'arith-op "expects a number, got: ~s" e)]))
+  (Num (op (Num->number expr1) (Num->number expr2))))
+(: eval : FLANG -> FLANG)
+;; evaluates FLANG expressions by reducing them to *expressions*
+(define (eval expr)
+  (cases expr
+    [(Num n) expr]
+    [(Add l r) (arith-op + (eval l) (eval r))]
+    [(Sub l r) (arith-op - (eval l) (eval r))]
+    [(Mul l r) (arith-op * (eval l) (eval r))]
+    [(Div l r) (arith-op / (eval l) (eval r))]
+    [(With bound-id named-expr bound-body)
+     (eval (subst bound-body
+                  bound-id
+                  (eval named-expr)))][(Id name) (error 'eval "free identifier: ~s" name)]
+    [(Fun bound-id bound-body) expr]
+    [(Call fun-expr arg-expr)
+     (let ([fval (eval fun-expr)])
+       (cases fval
+         [(Fun bound-id bound-body)
+          (eval (subst bound-body
+                       bound-id
+                       (eval arg-expr)))]
+         [else (error 'eval "`call' expects a function, got: ~s"
+                      fval)]))]))
+(: run : String -> Number)
+;; evaluate a FLANG program contained in a string
+(define (run str)
+  (let ([result (eval (parse str))])
+    (cases result
+      [(Num n) n]
+      [else (error 'run
+                   "evaluation returned a non-number: ~s" result)])))
+;; tests
+(test (run "{call {fun {x} {+ x 1}} 4}")
+      => 5)
+(test (run "{with {add3 {fun {x} {+ x 3}}}
+{call add3 1}}")
+      => 4)
+(test (run "{with {add3 {fun {x} {+ x 3}}}
+{with {add1 {fun {x} {+ x 1}}}
+{with {x 3}
+{call add1 {call add3 x}}}}}")
+      => 7)
+(test (run "{with {identity {fun {x} x}}
+{with {foo {fun {x} {+ x 1}}}
+{call {call identity foo} 123}}}")
+      => 124)
+(test (run "{call {call {fun {x} {call x 1}}
+{fun {x} {fun {y} {+ x y}}}}
+123}")
+      => 124)
+;;;;;; The evaluation part for the substitution cache model
+;; a type for substitution caches:
+(define-type SubstCache = (Listof (List Symbol FLANG)))
+(: empty-subst : SubstCache)
+(define empty-subst null)
+(: extend : Symbol FLANG SubstCache -> SubstCache)
+(define (extend name val sc)
+  (cons (list name val) sc))
+(: lookup : Symbol SubstCache -> FLANG)(define (lookup name sc)
+                                         (let ([cell (assq name sc)])
+                                           (if cell
+                                               (second cell)
+                                               (error 'lookup "no binding for ~s" name))))
+(: counterx : Natural)
+(define counterx 0)
+;;;above eval
+(: evalSC : FLANG SubstCache -> FLANG)
+;; evaluates FLANG expressions by reducing them to expressions
+(define (evalSC expr sc)
+  (set! counterx (add1 counterx))
+  (if (> counterx 500)
+      (error 'eval "exceeded 500 times")
+      (cases expr
+        [(Num n) expr]
+        [(Add l r) (arith-op + (evalSC l sc) (evalSC r sc))]
+        [(Sub l r) (arith-op - (evalSC l sc) (evalSC r sc))]
+        [(Mul l r) (arith-op * (evalSC l sc) (evalSC r sc))]
+        [(Div l r) (arith-op / (evalSC l sc) (evalSC r sc))]
+        [(With bound-id named-expr bound-body)
+         (evalSC bound-body
+                 (extend bound-id (evalSC named-expr sc) sc))]
+        [(Id name) (lookup name sc)]
+        [(Fun bound-id bound-body) expr]
+        [(Call fun-expr arg-expr)
+         (let ([fval (evalSC fun-expr sc)])
+           (cases fval
+             [(Fun bound-id bound-body)
+              (evalSC bound-body
+                      (extend bound-id (evalSC arg-expr sc) sc))]
+             [else (error 'evalSC "`call' expects a function, got: ~s"
+                          fval)]))])))
+(: runSC : String -> Number)
+;; evaluate a FLANG program contained in a string
+(define (runSC str)
+  (let ([result (evalSC (parse str) empty-subst)])
+    (cases result
+      [(Num n) n]
+      [else (error 'runSC
+                   "evaluation returned a non-number: ~s" result)])))
+
+
+(define (runFROL str)
+  (let ([result (evalSC (parse str) empty-subst)])
+    (cases result
+      [(Num n) n]
+      [else (error 'runSC
+                   "evaluation returned a non-number: ~s" result)])))
+
+
+
+
+(test (runFROL "{ reg-len = 3 {with {identity {fun {x} x}} {with {foo {fun {x} {or x {1 1 0}}}} {call {call identity foo} {0 1 0}}}}}") => '(1 1 0))
+(test (runFROL "{ reg-len = 3 {with {x {0 0 1}} {with {f {fun {y} {and x y}}} {with {x {0 0 0}} {call f {1 1 1}}}}}}") => '(0 0 1))
+(test (runFROL "{ reg-len = 4 {with {foo {fun {z} {if {maj? z} z {shl z}}}} {call foo {if {maj? {0 0 1 1}} {shl {1 0 1 1}} {1 1 0 1}}}}}") => '(0 1 1 1))
