@@ -1,0 +1,329 @@
+#lang pl
+
+;; The Flang interpreter – supporting both the substitution model and
+;; the substitution-cache model
+
+#|//////////////////////////////|#
+#|PREVIOUS ASSIGNMENT!!!!!!!!!!.|#
+#|//////////////////////////////|#
+
+#|//////////////////////////////|#
+#|QUESTION 1 -> about two hours.|#
+#|//////////////////////////////|#
+
+;;difficulties: Use of the syntax of Racket and get good readability on the code.
+
+#| BNF for the ROL language:
+
+<ROL> ::= {reg-len = <num> <RegE> }
+<RegE> ::= <Bits>       
+	   | {and <RegE> <RegE>}        
+	   | {or <RegE> <RegE>}        
+	   | {shl <RegE>}        
+	   | {with {<ID> <RegE>} <RegE> }          
+	   | {<ID>}
+           | {<BOOL>}
+           | {if <RegE> <RegE> <RegE>}
+           | {geq? <RegE> <RegE>}
+           | {maj? <RegE>}
+<Bits> ::= <bit> | <bit> <Bits>
+<bit>::= 1 | 0
+|#
+
+;; Defining two new types
+(define-type BIT = (U 0 1))
+(define-type Bit-List = (Listof BIT))
+
+;; RegE abstract syntax trees
+(define-type RegE
+  [Reg Bit-List]
+  [And RegE RegE]
+  [Or RegE RegE]
+  [Shl RegE]
+  [IdFROL Symbol]
+  [WithFROL Symbol RegE RegE]
+  [Bool Boolean]
+  [Geq RegE RegE]
+  [Maj RegE]
+  [If RegE RegE RegE]
+  [FunFROL Symbol RegE]
+  [CallFROL RegE RegE])
+;; Next is a technical function that converts (casts)
+;; (any) list into a bit-list. We use it in parse-sexpr.
+(: list->bit-list : (Listof Any) -> Bit-List)
+;; to cast a list of bits as a bit-list
+(define (list->bit-list lst)
+  (cond [(null? lst) null]
+        [(eq? (first lst) 1)(cons 1 (list->bit-list (rest lst)))]
+        [else (cons 0 (list->bit-list (rest lst)))]))(: parse-sexprFROL : Sexpr -> RegE)
+;; to convert the main s-expression into ROL
+(define (parse-sexprFROL sexpr)
+  (match sexpr
+    [(list 'reg-len = (number: n) args)
+     (if (> n 0) ;; remember to make sure specified register length is at least 1
+         (parse-sexpr-RegL args n)
+         (error 'parse-sexprFROL "Register length must be at least 1 ~s" sexpr) )]
+    [else (error 'parse-sexprFROL "bad syntax in ~s" sexpr)]))
+(: parse-sexpr-RegL : Sexpr Number -> RegE)
+;; to convert s-expressions into RegEs
+(define (parse-sexpr-RegL sexpr reg-len)
+  (match sexpr
+    ['true (Bool #t)]
+    ['false (Bool #f)]
+    [(list (and a (or 1 0)) ... ) (if (= reg-len (length a))
+                                      (Reg (list->bit-list a))
+                                      (error 'parse-sexpr-RegE "wrong number of bits in ~s" a))] ;; from the slides (changing the given code).
+    [(list 'and list1 list2) (And (parse-sexpr-RegL list1 reg-len) (parse-sexpr-RegL list2 reg-len))]
+    [(list 'or list1 list2) (Or (parse-sexpr-RegL list1 reg-len) (parse-sexpr-RegL list2 reg-len))]
+    [(list 'shl list) (Shl (parse-sexpr-RegL list reg-len))]
+    [(symbol: id-name) (IdFROL id-name)]  
+    [(cons 'with args)
+     (match sexpr
+       [(list 'with (list (symbol: oldName) newName) body)
+        (WithFROL oldName (parse-sexpr-RegL newName reg-len) (parse-sexpr-RegL body reg-len))]
+       [else (error 'parse-sexpr-RegE "bad `with' syntax in ~s" sexpr)])]
+    [(list 'geq? list1 list2) (Geq (parse-sexpr-RegL list1 reg-len) (parse-sexpr-RegL list2 reg-len))]
+    [(list 'maj? list) (Maj (parse-sexpr-RegL list reg-len))]
+    [(list 'if list1 list2 list3) (If (parse-sexpr-RegL list1 reg-len) (parse-sexpr-RegL list2 reg-len) (parse-sexpr-RegL list3 reg-len))]
+    [(list 'call fun arg) (CallFROL (parse-sexpr-RegL fun reg-len) (parse-sexpr-RegL arg reg-len))]
+    [(cons 'fun more)
+     (match sexpr
+       [(list 'fun (list (symbol: name)) body)
+        (FunFROL name (parse-sexpr-RegL body reg-len))]
+       [else (error 'parse-sexprFROL "bad `fun' syntax in ~s" sexpr)])]
+    [else (error 'parse-sexprFROL "bad syntax in ~s" sexpr)]))
+(: parseFROL : String -> RegE)
+;; parses a string containing a RegE expression to a RegE AST
+(define (parseFROL str)
+  (parse-sexprFROL (string->sexpr str)))
+
+#|///////////////////////////////|#
+#|QUESTION 2 -> about 10 minutes.|#
+#|///////////////////////////////|#
+
+;;difficulties: Nothing in particular, this question was pretty simple.
+
+(define-type RES
+  [RegV Bit-List]
+  [MyBool Boolean]
+  [MyFun Symbol RegE])
+
+#|////////////////////////////|#
+#|QUESTION 3 -> about 1 hours.|#
+#|////////////////////////////|#
+
+;;difficulties: At the beginning, implementing this question wasn't that hard, but
+;; at the time of the test and when I had to achieve a full coverage, I need to understand better how it's work.
+;; Then, after a lot of test I do success to full cover the constructor.
+
+(: substFROL : RegE Symbol RegE -> RegE)
+;; substitutes the second argument with the third argument in the
+;; first argument, as per the rules of substitution; the resulting
+;; expression contains no free instances of the second argument
+(define (substFROL expr from to)
+  (cases expr
+    [(Reg n) expr]
+    [(Bool b) expr]
+    [(And l r) (And (substFROL l from to) (substFROL r from to))] 
+    [(Or l r) (Or (substFROL l from to) (substFROL r from to))]
+    [(Shl s) (Shl (substFROL s from to))]
+    [(IdFROL name) (if (eq? name from) to expr)]
+    [(WithFROL bound-id named-expr bound-body)
+     (WithFROL bound-id
+               (substFROL named-expr from to)
+               (if (eq? bound-id from)
+                   bound-body
+                   (substFROL bound-body from to)))]
+    [(Geq l r) (Geq (substFROL l from to) (substFROL r from to))]
+    [(Maj list) (Maj (substFROL list from to))]
+    [(If l m r) (If (substFROL l from to) (substFROL m from to) (substFROL r from to))]
+    [(CallFROL l r) (CallFROL (substFROL l from to) (substFROL r from to))]
+    [(FunFROL bound-id bound-body)
+     (if (eq? bound-id from)
+         expr
+         (FunFROL bound-id (substFROL bound-body from to)))]
+    ))
+
+#|////////////////////////////|#
+#|QUESTION 4 -> about 2 hours.|#
+#|////////////////////////////|#
+
+;;difficulties: The implementation of all the function ask a good understanding of all the use
+;; of the define we already implements, so that was a little bit hard.
+;; Testing the function was actually easy since I did understand them good.
+
+(: evalFROL : RegE -> RES)
+;; evaluates RegE expressions by reducing them to bit-lists
+(define (evalFROL expr)
+  (cases expr
+    [(Reg reg) (RegV reg)]
+    [(Bool bl) (MyBool bl)]
+    [(And list1 list2) (reg-arith-op bit-and (evalFROL list1) (evalFROL list2))]
+    [(Or list1 list2) (reg-arith-op bit-or (evalFROL list1) (evalFROL list2))]
+    [(Shl list) (RegV (shift-left (RegV->bit-list (evalFROL list))))]
+    [(WithFROL bound-id named-expr bound-body)
+     (evalFROL (substFROL bound-body
+                          bound-id
+                          named-expr))]
+    [(If E1 E2 E3) (if (cases (evalFROL E1)
+                         [(MyBool myBool) myBool]
+                         [else #t]) (evalFROL E2) (evalFROL E3))]
+    [(Maj list1) (MyBool (majority? (RegV->bit-list (evalFROL list1))))]
+    [(Geq list1 list2) (MyBool (geq-bitlists? (RegV->bit-list (evalFROL list1)) (RegV->bit-list (evalFROL list2))))]
+    [(IdFROL name) (error 'evalFROL "free identifier: ~s" name)]
+    [(FunFROL bound-id bound-body) (MyFun bound-id bound-body)]
+    [(CallFROL fun-expr arg-expr)
+     (let ([fval (evalFROL fun-expr)])
+       (cases fval
+         [(MyFun bound-id bound-body)
+          (evalFROL (substFROL bound-body
+                               bound-id
+                               arg-expr))]
+         [else (error 'evalFROL "`call' expects a function, got: ~s"
+                      fval)]))]
+    ))
+  
+;; Defining functions for dealing with arithmetic operations
+;; on the above types
+(: bit-and : BIT BIT -> BIT) ;; Arithmetic and
+(define(bit-and a b)
+  (cond
+    [(eq? a 1) (if (eq? b 1) 1 0)]
+    [else 0])) ;; not used actually.
+(: bit-or : BIT BIT -> BIT) ;; Aithmetic or
+(define(bit-or a b)
+  (cond
+    [(eq? a 0) (if (eq? b 0) 0 1)]
+    [else 1])) ;; not used actually.
+(: reg-arith-op : (BIT BIT -> BIT) RES RES -> RES)
+;; Consumes two registers and some binary bit operation 'op',
+;; and returns the register obtained by applying op on the
+;; i'th bit of both registers for all i.
+(define(reg-arith-op op reg1 reg2)
+  (: bit-arith-op : Bit-List Bit-List -> Bit-List)
+  ;; Consumes two bit-lists and uses the binary bit operation 'op'.
+  ;; It returns the bit-list obtained by applying op on the
+  ;; i'th bit of both registers for all i.
+  (define(bit-arith-op bl1 bl2)
+    (map op bl1 bl2))
+  (RegV (bit-arith-op (RegV->bit-list reg1) (RegV->bit-list reg2))))
+(: majority? : Bit-List -> Boolean)
+;; Consumes a list of bits and checks whether the
+;; number of 1's are at least as the number of 0's. 
+(define(majority? bl)
+  (if (>= (foldl + 0 bl) (/ (length bl) 2)) #t #f))
+(: geq-bitlists? : Bit-List Bit-List -> Boolean)
+;; Consumes two bit-lists and compares them. It returns true if the
+;; first bit-list is larger or equal to the second.
+(define (geq-bitlists? bl1 bl2)
+  (cond
+    [(null? bl1) #t]  ;; So is bl2.
+    [(eq? (first bl1) 1) (if (eq? (first bl2) 1) (geq-bitlists? (rest bl1) (rest bl2)) #t)]
+    [(eq? (first bl2) 1)  #f]
+    [else (geq-bitlists? (rest bl1) (rest bl2))]))
+
+(: shift-left : Bit-List -> Bit-List)
+;; Shifts left a list of bits (once)
+(define(shift-left bl)
+  (append (rest bl) (list (first  bl))))
+(: RegV->bit-list : RES -> Bit-List)
+;; extract a bit-list from RES type
+(define (RegV->bit-list res)
+  (cases res
+    [(RegV bl) bl]
+    [else (error RegV->bit-list "run must return a bit-list")]))
+
+#|///////////////////////////////|#
+#|QUESTION 5 -> about 10 minutes.|#
+#|///////////////////////////////|#
+
+;;difficulties: Easy question: nothing in particular.
+
+(: runFROL : String -> Bit-List)
+;; evaluate a ROL program contained in a string
+;; we will not allow to return a boolean type
+(: runFROL : String -> Bit-List)
+(define (runFROL str)
+  (RegV->bit-list (evalFROL(parseFROL str))))
+
+#|///////////////////////////////|#
+#|CURRENT ASSIGNMENT !!!!!!!!!!!.|#
+#|///////////////////////////////|#
+
+;;difficulties: Easy question: nothing in particular.v
+#|////////////////////////////|#
+#|QUESTION 1 -> about 2 hours.|#
+#|////////////////////////////|#
+
+;;difficulties: Need first to understand the question, it took a lot of time since I got confused with the given code and we were supposed to do.
+;; Then, need to go over the errors and fixed them one by one until there is no more error.
+;; A little bit of dark work aslo took time.
+
+;; The Flang interpreter – supporting both the substitution model and
+;; the substitution-cache model
+
+#|
+The grammar:
+<FLANG> ::=
+|
+|
+|
+|
+|
+|
+|
+|
+<num>
+{ + <FLANG> <FLANG> }
+{ - <FLANG> <FLANG> }
+{ * <FLANG> <FLANG> }
+{ / <FLANG> <FLANG> }
+{ with { <id> <FLANG> } <FLANG> }
+<id>
+{ fun { <id> } <FLANG> }
+{ call <FLANG> <FLANG> }
+|#
+(define-type FLANG
+  [Num Number]
+  [Add FLANG FLANG]
+  [Sub FLANG FLANG]
+  [Mul FLANG FLANG]
+  [Div FLANG FLANG]
+  [Id Symbol]
+  [With Symbol FLANG FLANG]
+  [Fun Symbol FLANG]
+  [Call FLANG FLANG])
+
+;; parses a string containing a FLANG expression to a FLANG AST
+(define (parse str)
+  (parse-sexpr (string->sexpr str)))
+
+(: arith-op : (Number Number -> Number) FLANG FLANG -> FLANG)
+;; gets a Racket numeric binary operator, and uses it within a FLANG
+;; `Num' wrapper
+(define (arith-op op expr1 expr2)
+  (: Num->number : FLANG -> Number)
+  (define (Num->number e)
+    (cases e
+      [(Num n) n]
+      [else (error 'arith-op "expects a number, got: ~s" e)]))
+  (Num (op (Num->number expr1) (Num->number expr2))))
+
+(: run : String -> Number)
+;; evaluate a FLANG program contained in a string
+(define (run str)
+  (let ([result (eval (parse str))])
+    (cases result
+      [(Num n) n]
+      [else (error 'run "evaluation returned a non-number: ~s" result)])))
+
+
+
+
+
+
+
+
+
+
+
