@@ -1,5 +1,12 @@
 #lang pl
 
+;; The question 1 took me about 30 minutes of work.
+;; Nothing difficult in particular: only changes in the eval function.
+
+;; The question 2 took me about one hour of work.
+;; It took me time to understand the question.
+
+
 #| BNF for the ROL language:
 
 <ROL> ::= {reg-len = <num> <RegE> }
@@ -111,8 +118,8 @@
     [(And list1 list2) (reg-arith-op bit-and (evalFROL list1 env) (evalFROL list2 env))]
     [(Or list1 list2) (reg-arith-op bit-or (evalFROL list1 env) (evalFROL list2 env))]
     [(Shl list) (RegV (shift-left (RegV->bit-list (evalFROL list env))))]
-    [(WithFROL bound-id named-expr bound-body)
-     (evalFROL bound-body (Extend bound-id (evalFROL named-expr env) env))]    
+    [(WithFROL bound-id named-expr bound-body) 
+     (evalFROL (CallFROL (FunFROL bound-id bound-body) named-expr) env)]  ;; Syntatic Sugar: about one hour of work (time to understand the question). 
     [(If E1 E2 E3) (if (cases (evalFROL E1 env)
                          [(MyBool myBool) myBool]
                          [else #t]) (evalFROL E2 env) (evalFROL E3 env))]
